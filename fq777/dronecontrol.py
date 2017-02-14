@@ -9,6 +9,10 @@ HANDSHAKE_DATA = bytearray([0x49, 0x54, 0x64, 0x00, 0x00, 0x00, 0x5D, 0x00, 0x00
 
 START_DRONE_DATA = bytearray([0xCC, 0x7F, 0x7F, 0x0, 0x7F, 0x0, 0x7F, 0x33])
 
+FLY_DRONE_DATA = bytearray([0xCC, 0x80, 0x80, 0x7f, 0x80, 0x01, 0xFE, 0x33])
+
+LAND_DRONE_DATA = bytearray([0xCC, 0x80, 0x80, 0x7f, 0x80, 0x02, 0xFE, 0x33])
+
 
 class DroneControl(object):
     def __init__(self):
@@ -19,6 +23,7 @@ class DroneControl(object):
     def connect(self):
         self.connect_tcp()
         self.connect_udp()
+        self.droneCmd = FLY_DRONE_DATA[:]
 
     def connect_tcp(self): # handshake
         print("Starting Handshake...")
@@ -54,6 +59,18 @@ class DroneControl(object):
         self.droneCmd[6] = self.checksum(self.droneCmd)
         self.udp_socket.send(self.droneCmd)
 
+    def takeOff(self):
+        print "taking off"
+        takeOffCmd = FLY_DRONE_DATA
+        for i in xrange(16):
+            self.udp_socket.send(takeOffCmd)
+        print "done taking off"
+
+    def land(self):
+        landCmd = LAND_DRONE_DATA
+        for i in xrange(16):
+            self.udp_socket.send(landCmd)
+
     def stop(self):
         time.sleep(0.05)
         self.udp_socket.send(START_DRONE_DATA)
@@ -64,7 +81,7 @@ if __name__ == "__main__":
     drone.connect()
 
     for i in range(100):
-        drone.cmd(t=50)
+        drone.cmd(t=100)
 
     drone.stop()
     drone.disconnect()

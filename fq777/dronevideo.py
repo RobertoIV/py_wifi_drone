@@ -38,12 +38,15 @@ DATA1 = bytearray([0x49, 0x54, 0x64, 0x00, 0x00, 0x00, 0x58, 0x00, 0x00, 0x00,
             0x6D, 0x93, 0xF7, 0x2A, 0x85, 0xE7, 0x35, 0x6E, 0xFF, 0xE1, 0xB8,
             0xF5, 0xAF, 0x09, 0x7F, 0x91, 0x47, 0xF8, 0x7E])
 
+import cv2
+
 class DroneVideo(object):
 
     def __init__(self):
-        self.fh = open("fpv.mp4", 'wb')
+        #self.fh = open("fpv.mp4", 'wb')
         self.ip = '172.16.10.1'
         self.port = 8888
+
 
     def fetch_video(self):
         count = 0
@@ -58,16 +61,22 @@ class DroneVideo(object):
         stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         stream.connect((self.ip, self.port))
         stream.send(DATA1)
+        stream.settimeout(5)
 
-        stream.settimeout(1)
-
+        #vidCap = cv2.VideoCapture('172.16.10.1:8888')
         while True:
             count +=1
             try:
                 data = stream.recv(8192)
+                print repr(data)
             except socket.timeout:
                 stream.close()
                 video.close()
                 return count
             
-            self.fh.write(data)
+            #self.fh.write(data)
+
+
+if __name__ == "__main__":
+	dv = DroneVideo()
+	dv.fetch_video()
