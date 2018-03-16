@@ -1,5 +1,19 @@
 import socket
 import time
+import threading
+
+import numpy as np
+import cv2
+
+try:
+    import gi
+    gi.require_version("Gst", "1.0")
+    from gi.repository import Gst, GLib
+except ImportError:
+    print "Couldn't open gstreamer"
+
+
+
 
 DATA = [
             bytearray([0x49, 0x54, 0x64, 0x00, 0x00, 0x00, 0x52, 0x00, 0x00,
@@ -38,17 +52,67 @@ DATA1 = bytearray([0x49, 0x54, 0x64, 0x00, 0x00, 0x00, 0x58, 0x00, 0x00, 0x00,
             0x6D, 0x93, 0xF7, 0x2A, 0x85, 0xE7, 0x35, 0x6E, 0xFF, 0xE1, 0xB8,
             0xF5, 0xAF, 0x09, 0x7F, 0x91, 0x47, 0xF8, 0x7E])
 
-import cv2
 
-class DroneVideo(object):
-
+class DroneVideo(threading.Thread):
     def __init__(self):
-        #self.fh = open("fpv.mp4", 'wb')
+        super(DroneVideo, self).__init__()
         self.ip = '172.16.10.1'
         self.port = 8888
+        self.fh = open("fpv.mp4", 'wb')
+        self.daemon = True
 
+        Gst.init([])  # init gstreamer
+        self.source = Gst.ElementFactory.make("appsrc", "vidsrc")
+        parser = Gst.ElementFactory.make("h264parse", "h264parser")
+        decoder = Gst.ElementFactory.make("avdec_h264", "h264decoder")
+        convert = Gst.ElementFactory.make("videoconvert", "yuv_to_rgb")
+        convert.set_property("format", "bgr")
+        self.output = Gst.ElementFactory.make("appsink")
+        self.output.set_property("emit-signals", True)
+        self.output.connect("new-sample", self.new_buffer, self.output)
 
-    def fetch_video(self):
+        self.pipeline = Gst.Pipeline.new()
+        self.pipeline.add(self.source)
+        self.pipeline.add(parser)
+        self.pipeline.add(decoder)
+        self.pipeline.add(convert)
+        self.pipeline.add(self.output)
+
+        # # Link the elements
+        self.source.link(parser)
+        parser.link(decoder)
+        decoder.link(convert)
+        convert.link(self.output)
+
+        self.image_arr = None
+
+        self.pipeline.set_state(Gst.State.PLAYING)
+        self.start()
+
+    def new_buffer(self, sink, data):
+        sample = self.output.emit("pull-sample")
+        arr = self.gst_to_opencv(sample)
+        self.image_arr = arr
+        return Gst.FlowReturn.OK
+
+    def gst_to_opencv(self, sample):
+        buf = sample.get_buffer()
+        caps = sample.get_caps()
+        print caps.get_structure(0).get_value('format')
+        print caps.get_structure(0).get_value('height')
+        print caps.get_structure(0).get_value('width')
+
+        print buf.get_size()
+
+        arr = np.ndarray(
+            (caps.get_structure(0).get_value('height'),
+             caps.get_structure(0).get_value('width'),
+             3),
+            buffer=buf.extract_dup(0, buf.get_size()),
+            dtype=np.uint8)
+        return arr
+
+    def run(self):
         count = 0
         video = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         video.connect((self.ip, self.port))
@@ -63,20 +127,24 @@ class DroneVideo(object):
         stream.send(DATA1)
         stream.settimeout(5)
 
-        #vidCap = cv2.VideoCapture('172.16.10.1:8888')
         while True:
             count +=1
             try:
                 data = stream.recv(8192)
-                print repr(data)
+                buf = Gst.Buffer.new_allocate(None, len(data), None)
+                assert buf is not None
+                buf.fill(0, data)
+                self.source.emit("push-buffer", buf)
+
             except socket.timeout:
                 stream.close()
                 video.close()
                 return count
-            
-            #self.fh.write(data)
-
 
 if __name__ == "__main__":
-	dv = DroneVideo()
-	dv.fetch_video()
+    dv = DroneVideo()
+    while True:
+        im = dv.image_arr
+        if im is not None:
+            cv2.imshow('frame', im)
+            cv2.waitKey(1)
