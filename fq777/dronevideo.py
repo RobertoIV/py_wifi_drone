@@ -66,8 +66,9 @@ class DroneVideo(threading.Thread):
         parser = Gst.ElementFactory.make("h264parse", "h264parser")
         decoder = Gst.ElementFactory.make("avdec_h264", "h264decoder")
         convert = Gst.ElementFactory.make("videoconvert", "yuv_to_rgb")
-        convert.set_property("format", "bgr")
         self.output = Gst.ElementFactory.make("appsink")
+        caps = Gst.caps_from_string("video/x-raw, format=(string)BGR;")
+        self.output.set_property("caps", caps)
         self.output.set_property("emit-signals", True)
         self.output.connect("new-sample", self.new_buffer, self.output)
 
@@ -87,22 +88,20 @@ class DroneVideo(threading.Thread):
         self.image_arr = None
 
         self.pipeline.set_state(Gst.State.PLAYING)
+        self.start_time = time.time()
+        self.last_image_ts = time.time()
         self.start()
 
     def new_buffer(self, sink, data):
         sample = self.output.emit("pull-sample")
         arr = self.gst_to_opencv(sample)
         self.image_arr = arr
+        self.last_image_ts = time.time()
         return Gst.FlowReturn.OK
 
     def gst_to_opencv(self, sample):
         buf = sample.get_buffer()
         caps = sample.get_caps()
-        print caps.get_structure(0).get_value('format')
-        print caps.get_structure(0).get_value('height')
-        print caps.get_structure(0).get_value('width')
-
-        print buf.get_size()
 
         arr = np.ndarray(
             (caps.get_structure(0).get_value('height'),
@@ -137,6 +136,7 @@ class DroneVideo(threading.Thread):
                 self.source.emit("push-buffer", buf)
 
             except socket.timeout:
+                print "timeout: ", time.time() - self.start_time
                 stream.close()
                 video.close()
                 return count
