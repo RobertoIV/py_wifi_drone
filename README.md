@@ -8,6 +8,9 @@ The video also requires OpenCV installed with the python bindings.
 
 Finally pygame needs to be installed.
 
+## Testing
+You can run the pygame keyboard controller simply by calling `python dronekeyboard.py` 
+
 ## Known issues
 The video streaming isn't perfect and has some artifacting and delays.  On the app, the artifacting isn't present, so there should be a way to fix it.
 
