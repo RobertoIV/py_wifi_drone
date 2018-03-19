@@ -1,4 +1,5 @@
 import logging
+import time
 
 import pygame
 import cv2
@@ -19,6 +20,8 @@ if __name__ == "__main__":
     drone.connect()
 
     video = DroneVideo()
+
+    time.sleep(1.0)
 
     r = 127
     p = 127
@@ -71,7 +74,7 @@ if __name__ == "__main__":
 
         drone.cmd(r, p, t, y)
 
-        frame = video.image_arr
+        frame = video.get_last_image()
         if frame is not None:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame = np.flipud(np.rot90(frame))

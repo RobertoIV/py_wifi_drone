@@ -16,13 +16,19 @@ import droneconfig
 
 
 class DroneVideo(threading.Thread):
+    """This handles connecting to and parsing the video coming off of the drone.
+    """
     def __init__(self):
         super(DroneVideo, self).__init__()
+        logging.info("Starting drone video")
         self.ip = '172.16.10.1'
         self.port = 8888
         self.daemon = True
 
-        Gst.init([])  # init gstreamer
+        # The video is in h264 format coming from the drone.
+        # This gstreamer pipeline decodes the h264 frames and
+        # converts them to BGR to be used with opencv
+        Gst.init([])
         self.source = Gst.ElementFactory.make("appsrc", "vidsrc")
         parser = Gst.ElementFactory.make("h264parse", "h264parser")
         decoder = Gst.ElementFactory.make("avdec_h264", "h264decoder")
@@ -33,6 +39,7 @@ class DroneVideo(threading.Thread):
         self.output.set_property("emit-signals", True)
         self.output.connect("new-sample", self.new_buffer, self.output)
 
+        # Add elements to pipeline
         self.pipeline = Gst.Pipeline.new()
         self.pipeline.add(self.source)
         self.pipeline.add(parser)
@@ -40,21 +47,41 @@ class DroneVideo(threading.Thread):
         self.pipeline.add(convert)
         self.pipeline.add(self.output)
 
-        # # Link the elements
+        # Link the elements
         self.source.link(parser)
         parser.link(decoder)
         decoder.link(convert)
         convert.link(self.output)
 
         self.image_arr = None
-        self.last_send = time.time()
-
         self.pipeline.set_state(Gst.State.PLAYING)
-        self.start_time = time.time()
         self.last_image_ts = time.time()
+        self.open_connections()
         self.start()
 
+    def open_connections(self):
+        # Like the drone control, this performs handshaking for the 
+        # video stream.
+        self.video = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.video.connect((self.ip, self.port))
+        self.video.send(droneconfig.VIDEO_INITIALIZE[0])
+        logging.info("video link 1: {}".format(len(self.video.recv(8192))))
+        self.video.send(droneconfig.VIDEO_INITIALIZE[1])
+        logging.info("video link 2: {}".format(len(self.video.recv(8192))))
+
+        # This is the actual stream for the video frames
+        self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.stream.connect((self.ip, self.port))
+        self.stream.send(droneconfig.STREAM_START)
+        self.stream.settimeout(5)
+
+        # Hearbeat must be started last, this keeps the video stream alive.
+        self.heartbeat = DroneHeartbeat()
+
     def new_buffer(self, sink, data):
+        """Callback for a new frame from the gstreamer
+        pipeline.
+        """
         sample = self.output.emit("pull-sample")
         arr = self.gst_to_opencv(sample)
         self.image_arr = arr
@@ -62,6 +89,8 @@ class DroneVideo(threading.Thread):
         return Gst.FlowReturn.OK
 
     def gst_to_opencv(self, sample):
+        """Convert the gstreamer frame to an opencv image (numpy array).
+        """
         buf = sample.get_buffer()
         caps = sample.get_caps()
 
@@ -74,25 +103,12 @@ class DroneVideo(threading.Thread):
         return arr
 
     def run(self):
-        count = 0
-        video = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        video.connect((self.ip, self.port))
-
-        video.send(droneconfig.VIDEO_INITIALIZE[0])
-        logging.info("video link 1:", len(video.recv(8192)))
-        video.send(droneconfig.VIDEO_INITIALIZE[1])
-        logging.info("video link 2:", len(video.recv(8192)))
-
-        stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        stream.connect((self.ip, self.port))
-        stream.send(droneconfig.STREAM_START)
-        stream.settimeout(5)
-
-        heartbeat = DroneHeartbeat()
-
+        """Video thread
+        """
         while True:
             try:
-                data = stream.recv(8192)
+                data = self.stream.recv(8192)
+                logging.debug("New video data of length: {}".format(len(data)))
                 buf = Gst.Buffer.new_allocate(None, len(data), None)
                 assert buf is not None
                 buf.fill(0, data)
@@ -100,12 +116,21 @@ class DroneVideo(threading.Thread):
 
             except socket.timeout:
                 logging.error("timeout: {}".format(time.time() - self.start_time))
-                stream.close()
-                video.close()
+                self.stream.close()
+                self.video.close()
                 return
+
+    def get_last_image(self):
+        return self.image_arr
+
+    def get_last_ts(self):
+        return self.last_image_ts
 
 
 class DroneHeartbeat(threading.Thread):
+    """This keeps the video connection alive.  Without it, the video stream
+    will stop after 30 seconds.
+    """
     def __init__(self):
         super(DroneHeartbeat, self).__init__()
         self.ip = '172.16.10.1'
@@ -115,6 +140,8 @@ class DroneHeartbeat(threading.Thread):
         self.start()
 
     def run(self):
+        """Send the heartbeat signal once every HEARBEAT_RATE seconds
+        """
         heartbeat = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         heartbeat.connect((self.ip, self.port))
         heartbeat.send(droneconfig.HEARTBEAT)
@@ -122,6 +149,7 @@ class DroneHeartbeat(threading.Thread):
         while True:
             try:
                 if time.time() - self.last_beat > droneconfig.HEARTBEAT_RATE:
+                    logging.debug("Heartbeat: {}".format(time.time()))
                     heartbeat.send(droneconfig.HEARTBEAT)
                     self.last_beat = time.time()
             except socket.timeout:
@@ -130,9 +158,10 @@ class DroneHeartbeat(threading.Thread):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     dv = DroneVideo()
     while True:
-        im = dv.image_arr
+        im = dv.get_last_image()
         if im is not None:
             cv2.imshow('frame', im)
             cv2.waitKey(1)
