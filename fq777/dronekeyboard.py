@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 
 import pygame
@@ -11,7 +12,6 @@ from dronevideo import DroneVideo
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-
     logging.info("Starting keyboard control app")
     pygame.init()
     screen = pygame.display.set_mode((576, 720))
@@ -20,7 +20,6 @@ if __name__ == "__main__":
     drone.connect()
 
     video = DroneVideo()
-
     time.sleep(1.0)
 
     r = 127
@@ -43,12 +42,12 @@ if __name__ == "__main__":
                     direction = -1
 
                 if key == 27:  # ESC
-                    logging.info("[PC]: ESC exiting")
+                    logging.info("ESC exiting")
                     drone.stop()
                     drone.disconnect()
                     pygame.quit()
                 elif key == 13:  # Enter
-                    logging.info("[PC]: Enter")
+                    logging.info("Enter")
                 elif key == 119:  # w
                     p += direction*30
                 elif key == 97:  # a
@@ -79,5 +78,5 @@ if __name__ == "__main__":
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame = np.flipud(np.rot90(frame))
             frame = pygame.surfarray.make_surface(frame)
-            screen.blit(frame, (0,0))
+            screen.blit(frame, (0, 0))
             pygame.display.update()

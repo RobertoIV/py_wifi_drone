@@ -1,5 +1,4 @@
 import socket
-import time
 import logging
 
 import droneconfig
@@ -50,7 +49,7 @@ class DroneControl(object):
         Returns:
             the 8 bit xor checksum of the data
         """
-        return_data = (data[1] ^ data[2] ^ data[3] ^ data[4] ^ data[5]) & 0xFF;
+        return_data = (data[1] ^ data[2] ^ data[3] ^ data[4] ^ data[5]) & 0xFF
         return return_data
 
     def disconnect(self):
@@ -69,7 +68,7 @@ class DroneControl(object):
             r (int): 0-255 for the roll of the drone, 127 is the middle
             p (int): 0-255 for the pitch of the drone, 127 is the middle
             t (int): 0-255 for the throttle of the drone, 0 is no throttle
-            y (int): 0-255 for the yaw of the drone, 127 is middle 
+            y (int): 0-255 for the yaw of the drone, 127 is middle
         """
         droneCmd = droneconfig.FLY_DRONE_DATA[:]
         droneCmd[1] = r

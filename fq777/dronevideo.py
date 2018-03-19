@@ -8,7 +8,7 @@ import cv2
 try:
     import gi
     gi.require_version("Gst", "1.0")
-    from gi.repository import Gst, GLib
+    from gi.repository import Gst
 except ImportError:
     logging.error("Couldn't open gstreamer")
 
@@ -60,7 +60,7 @@ class DroneVideo(threading.Thread):
         self.start()
 
     def open_connections(self):
-        # Like the drone control, this performs handshaking for the 
+        # Like the drone control, this performs handshaking for the
         # video stream.
         self.video = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.video.connect((self.ip, self.port))
