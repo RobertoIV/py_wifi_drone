@@ -14,7 +14,8 @@ Finally pygame needs to be installed.
 You can run the pygame keyboard controller simply by calling `python dronekeyboard.py` 
 
 ## Known issues
-The video streaming isn't perfect and has some artifacting and delays.  On the app, the artifacting isn't present, so there should be a way to fix it.
+The video streaming isn't perfect and has some artifacting and delays.  On the app, the artifacting isn't present, so there should be a way to fix it.  
 
+Also it uses python's threading module which isn't true threading due to the GIL and should use processes instread.
 
 This repo is forked from here: https://github.com/voorloopnul/drone-fq777-954
